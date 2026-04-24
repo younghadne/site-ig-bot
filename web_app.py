@@ -11,9 +11,10 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
+from pyvirtualdisplay import Display
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'instagram-bot-secret'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'instagram-bot-secret')
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 bot_state = {
@@ -78,12 +79,30 @@ def human_delay(base=2.0, jitter=0.3):
 def do_browser_login():
     """Open Chrome so user can login themselves, then capture session"""
     driver = None
+    display = None
     try:
+        # Check if running in headless environment (Railway)
+        is_headless = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('HEADLESS', '').lower() == 'true'
+        
+        if is_headless:
+            log("🖥️ Running in headless mode, starting virtual display...")
+            display = Display(visible=0, size=(1920, 1080))
+            display.start()
+            log("✅ Virtual display started")
+        
         log("🌐 Opening Chrome browser for you to login...")
         log("👉 Login to Instagram in the browser window, then come back here")
         
         options = Options()
-        options.add_argument("--window-size=412,915")
+        if is_headless:
+            options.add_argument("--headless=new")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--disable-gpu")
+            log("🔧 Using headless Chrome mode")
+        else:
+            options.add_argument("--window-size=412,915")
+        
         options.add_argument("--user-agent=Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1")
         
         # Auto-download correct ChromeDriver version
@@ -197,6 +216,12 @@ def do_browser_login():
             try:
                 driver.quit()
                 log("🌐 Browser closed")
+            except:
+                pass
+        if display:
+            try:
+                display.stop()
+                log("🖥️ Virtual display stopped")
             except:
                 pass
 
@@ -472,8 +497,10 @@ def index():
 
 @socketio.on('connect')
 def on_connect():
+    is_headless = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('HEADLESS', '').lower() == 'true'
     emit('bot_status', {'running': bot_state['running']})
     emit('stats', bot_state['stats'])
+    emit('headless_mode', {'enabled': is_headless})
     
     # Try to load saved session automatically
     if not bot_state['cl']:
@@ -591,4 +618,6 @@ def on_reset():
     emit('stats', bot_state['stats'])
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('DEBUG', 'False').lower() == 'true'
+    socketio.run(app, debug=debug, host='0.0.0.0', port=port)

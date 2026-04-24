@@ -137,11 +137,11 @@
     <!-- Login -->
     <div class="card">
         <div class="card-title">🔐 Login</div>
-        <p style="opacity:0.6; margin-bottom:12px; font-size:14px;">Choose your login method:</p>
+        <p style="opacity:0.6; margin-bottom:12px; font-size:14px;" id="login-hint">Choose your login method:</p>
         
-        <div style="display:flex; gap:10px; margin-bottom:12px;">
-            <button class="green" onclick="doBrowserLogin()" style="flex:1; padding:14px; font-size:14px;">🌐 Browser Login</button>
-            <button class="secondary" onclick="togglePasswordLogin()" style="flex:1; padding:14px; font-size:14px;">🔑 Password Login</button>
+        <div style="display:flex; gap:10px; margin-bottom:12px;" id="login-buttons">
+            <button class="green" onclick="doBrowserLogin()" style="flex:1; padding:14px; font-size:14px;" id="browser-login-btn">🌐 Browser Login</button>
+            <button class="secondary" onclick="togglePasswordLogin()" style="flex:1; padding:14px; font-size:14px;" id="password-login-toggle">🔑 Password Login</button>
         </div>
         
         <div id="password-login-section" style="display:none; margin-top:12px;">
@@ -299,6 +299,16 @@ socket.on('login_status', (data) => {
     } else {
         el.className = 'login-status fail';
         el.textContent = '❌ Login failed';
+    }
+});
+
+socket.on('headless_mode', (data) => {
+    if (data.enabled) {
+        // Hide browser login button, show password login by default
+        document.getElementById('browser-login-btn').style.display = 'none';
+        document.getElementById('password-login-toggle').style.display = 'none';
+        document.getElementById('password-login-section').style.display = 'block';
+        document.getElementById('login-hint').textContent = '🖥️ Running in headless mode - use password login:';
     }
 });
 
