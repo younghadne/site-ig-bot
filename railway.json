@@ -4,8 +4,9 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "healthcheckPath": "/",
+    "healthcheckPath": "/health",
     "healthcheckTimeout": 300,
-    "restartPolicyType": "ON_FAILURE"
+    "restartPolicyType": "ON_FAILURE",
+    "startCommand": "python web_app.py"
   }
 }

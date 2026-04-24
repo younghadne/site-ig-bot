@@ -27,37 +27,28 @@ def load_saved_session():
     """Try to load a saved session if available"""
     try:
         import glob
+        if not os.path.exists("sessions"):
+            os.makedirs("sessions", exist_ok=True)
+            return False
+            
         session_files = glob.glob("sessions/*.json")
-        log(f"🔍 Checking for saved sessions... Found {len(session_files)} files")
-        if session_files:
-            latest_file = max(session_files, key=os.path.getmtime)
-            log(f"📂 Found saved session: {latest_file}")
+        if not session_files:
+            return False
             
-            cl = Client()
-            cl.delay_range = [3, 6]
-            log(f"📖 Loading session file...")
-            cl.load_settings(latest_file)
-            
-            # Verify session still works
-            try:
-                log(f"🔐 Verifying session is still valid...")
-                user_info = cl.account_info()
-                username = user_info.username
-                bot_state['cl'] = cl
-                bot_state['username'] = username
-                log(f"✅ Loaded saved session as @{username}")
-                return True
-            except Exception as e:
-                log(f"⚠️ Saved session verification failed: {str(e)[:100]}")
-                log("⚠️ Saved session expired, need to login again")
-                return False
-        else:
-            log("ℹ️ No saved sessions found, need to login")
+        latest_file = max(session_files, key=os.path.getmtime)
+        
+        cl = Client()
+        cl.delay_range = [3, 6]
+        cl.load_settings(latest_file)
+        
+        # Verify session still works
+        user_info = cl.account_info()
+        username = user_info.username
+        bot_state['cl'] = cl
+        bot_state['username'] = username
+        return True
     except Exception as e:
-        log(f"⚠️ Could not load session: {str(e)[:100]}")
-        import traceback
-        log(f"🔧 Traceback: {traceback.format_exc()[:200]}")
-    return False
+        return False
 
 def log(message):
     timestamp = datetime.now().strftime("%H:%M:%S")
@@ -338,6 +329,10 @@ def run_bot_loop(targets, follow_limit, like_limit, followers_per_account):
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/health')
+def health():
+    return {'status': 'ok'}, 200
 
 @socketio.on('connect')
 def on_connect():
