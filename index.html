@@ -137,25 +137,18 @@
     <!-- Login -->
     <div class="card">
         <div class="card-title">🔐 Login</div>
-        <p style="opacity:0.6; margin-bottom:12px; font-size:14px;" id="login-hint">Choose your login method:</p>
+        <p style="opacity:0.6; margin-bottom:12px; font-size:14px;">Enter your Instagram credentials:</p>
         
-        <div style="display:flex; gap:10px; margin-bottom:12px;" id="login-buttons">
-            <button class="green" onclick="doBrowserLogin()" style="flex:1; padding:14px; font-size:14px;" id="browser-login-btn">🌐 Browser Login</button>
-            <button class="secondary" onclick="togglePasswordLogin()" style="flex:1; padding:14px; font-size:14px;" id="password-login-toggle">🔑 Password Login</button>
-        </div>
-        
-        <div id="password-login-section" style="display:none; margin-top:12px;">
-            <div class="login-grid">
-                <div class="field">
-                    <label>Username</label>
-                    <input type="text" id="username" placeholder="your_username">
-                </div>
-                <div class="field">
-                    <label>Password</label>
-                    <input type="password" id="password" placeholder="••••••••">
-                </div>
-                <button onclick="doPasswordLogin()">Login</button>
+        <div class="login-grid">
+            <div class="field">
+                <label>Username</label>
+                <input type="text" id="username" placeholder="your_username">
             </div>
+            <div class="field">
+                <label>Password</label>
+                <input type="password" id="password" placeholder="••••••••">
+            </div>
+            <button onclick="doPasswordLogin()">Login</button>
         </div>
         
         <div class="login-status" id="login-status"></div>
@@ -301,27 +294,6 @@ socket.on('login_status', (data) => {
         el.textContent = '❌ Login failed';
     }
 });
-
-socket.on('headless_mode', (data) => {
-    if (data.enabled) {
-        // Hide browser login button, show password login by default
-        document.getElementById('browser-login-btn').style.display = 'none';
-        document.getElementById('password-login-toggle').style.display = 'none';
-        document.getElementById('password-login-section').style.display = 'block';
-        document.getElementById('login-hint').textContent = '🖥️ Running in headless mode - use password login:';
-    }
-});
-
-function togglePasswordLogin() {
-    const section = document.getElementById('password-login-section');
-    section.style.display = section.style.display === 'none' ? 'block' : 'none';
-}
-
-function doBrowserLogin() {
-    document.getElementById('login-status').className = 'login-status';
-    document.getElementById('login-status').textContent = '⏳ Opening browser...';
-    socket.emit('browser_login', {});
-}
 
 function doPasswordLogin() {
     const username = document.getElementById('username').value;

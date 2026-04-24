@@ -7,11 +7,6 @@ import json
 import os
 from datetime import datetime
 from instagrapi import Client
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from pyvirtualdisplay import Display
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'instagram-bot-secret')
@@ -75,155 +70,6 @@ def human_delay(base=2.0, jitter=0.3):
     time.sleep(base * random.uniform(1 - jitter, 1 + jitter))
 
 # ==================== INSTAGRAM ACTIONS ====================
-
-def do_browser_login():
-    """Open Chrome so user can login themselves, then capture session"""
-    driver = None
-    display = None
-    try:
-        # Check if running in headless environment (Railway)
-        is_headless = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('HEADLESS', '').lower() == 'true'
-        
-        if is_headless:
-            log("🖥️ Running in headless mode, starting virtual display...")
-            display = Display(visible=0, size=(1920, 1080))
-            display.start()
-            log("✅ Virtual display started")
-        
-        log("🌐 Opening Chrome browser for you to login...")
-        log("👉 Login to Instagram in the browser window, then come back here")
-        
-        options = Options()
-        if is_headless:
-            options.add_argument("--headless=new")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
-            options.add_argument("--disable-gpu")
-            log("🔧 Using headless Chrome mode")
-        else:
-            options.add_argument("--window-size=412,915")
-        
-        options.add_argument("--user-agent=Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1")
-        
-        # Auto-download correct ChromeDriver version
-        log(f"🔧 Setting up ChromeDriver...")
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
-        log(f"✅ Chrome browser opened")
-        
-        # Navigate to Instagram login
-        log(f"🌍 Navigating to Instagram login page...")
-        driver.get("https://www.instagram.com/accounts/login/")
-        log("⏳ Waiting for you to login... (take your time)")
-        
-        # Wait until user is logged in (URL changes away from login page)
-        for i in range(300):  # Wait up to 5 minutes
-            time.sleep(1)
-            try:
-                current_url = driver.current_url
-                if i % 30 == 0:  # Log every 30 seconds
-                    log(f"⏱️ Still waiting... ({i//60}m {i%60}s elapsed)")
-                if "login" not in current_url and "accounts" not in current_url:
-                    log(f"✅ Detected successful login! URL: {current_url}")
-                    break
-            except Exception as e:
-                log(f"⚠️ Error checking URL: {str(e)[:50]}")
-                break
-        else:
-            log("⚠️ Timed out waiting for login (5 minutes)")
-            return False
-        
-        time.sleep(3)  # Let page fully load
-        log("📄 Page loaded, extracting cookies...")
-        
-        # Extract cookies from browser
-        cookies = driver.get_cookies()
-        log(f"🍪 Captured {len(cookies)} cookies from browser")
-        
-        # Log cookie names for debugging
-        cookie_names = [c['name'] for c in cookies]
-        log(f"📋 Cookie names: {', '.join(cookie_names[:10])}")
-        
-        # Get session info from cookies
-        session_data = {}
-        for cookie in cookies:
-            session_data[cookie['name']] = cookie['value']
-        
-        # Check for sessionid
-        sessionid = session_data.get('sessionid', '')
-        if sessionid:
-            log(f"✅ Found sessionid cookie (length: {len(sessionid)})")
-        else:
-            log("❌ No sessionid cookie found!")
-            return False
-        
-        # Get the username from the browser
-        try:
-            log("🔍 Fetching username from account edit page...")
-            driver.get("https://www.instagram.com/accounts/edit/")
-            time.sleep(3)
-            # Try to find username in page source
-            page_source = driver.page_source
-            import re
-            username_match = re.search(r'"username":"([^"]+)"', page_source)
-            if username_match:
-                username = username_match.group(1)
-                log(f"👤 Detected username: @{username}")
-            else:
-                log("⚠️ Could not extract username from page source")
-                username = "me"
-        except Exception as e:
-            log(f"⚠️ Error getting username: {str(e)[:50]}")
-            username = "me"
-        
-        # Create instagrapi client with safe delays
-        cl = Client()
-        cl.delay_range = [3, 6]  # 3-6 seconds between actions (safe mode)
-        
-        # Use sessionid for login (most reliable method)
-        sessionid = session_data.get('sessionid', '')
-        
-        if not sessionid:
-            log("❌ Could not find sessionid cookie")
-            return False
-        
-        try:
-            log(f"🔑 Using sessionid to login...")
-            cl.login_by_sessionid(sessionid=sessionid)
-            username = cl.account_info().username
-            log(f"✅ Logged in via session ID as @{username}")
-            
-            # Save session for reuse
-            os.makedirs("sessions", exist_ok=True)
-            cl.dump_settings(f"sessions/{username}.json")
-            log("💾 Session saved for next time")
-            
-            bot_state['cl'] = cl
-            bot_state['username'] = username
-            log(f"✅ Ready! Bot is connected as @{username}")
-            return True
-            
-        except Exception as e:
-            log(f"❌ Session login failed: {str(e)[:100]}")
-            log("� Try logging in again or check if session expired")
-            return False
-        
-    except Exception as e:
-        log(f"❌ Browser login error: {str(e)}")
-        return False
-    finally:
-        if driver:
-            try:
-                driver.quit()
-                log("🌐 Browser closed")
-            except:
-                pass
-        if display:
-            try:
-                display.stop()
-                log("🖥️ Virtual display stopped")
-            except:
-                pass
 
 def do_search_and_follow(target, max_followers, follow_limit):
     cl = bot_state['cl']
@@ -438,12 +284,10 @@ def run_bot_loop(targets, follow_limit, like_limit, followers_per_account):
         
         # Check if logged in
         if not bot_state['cl']:
-            log("⚠️ No active session found, attempting browser login...")
-            if not do_browser_login():
-                log("❌ Browser login failed, cannot start bot")
-                bot_state['running'] = False
-                socketio.emit('bot_status', {'running': False})
-                return
+            log("❌ No active session found. Please login first.")
+            bot_state['running'] = False
+            socketio.emit('bot_status', {'running': False})
+            return
         else:
             log(f"✅ Using existing session as @{bot_state['username']}")
         
@@ -497,25 +341,13 @@ def index():
 
 @socketio.on('connect')
 def on_connect():
-    is_headless = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('HEADLESS', '').lower() == 'true'
     emit('bot_status', {'running': bot_state['running']})
     emit('stats', bot_state['stats'])
-    emit('headless_mode', {'enabled': is_headless})
     
     # Try to load saved session automatically
     if not bot_state['cl']:
         if load_saved_session():
             emit('login_status', {'success': True, 'username': bot_state.get('username', '')})
-
-@socketio.on('browser_login')
-def on_browser_login(data):
-    log("📡 Browser login requested...")
-    def login_thread():
-        if do_browser_login():
-            emit('login_status', {'success': True, 'username': bot_state.get('username', '')})
-        else:
-            emit('login_status', {'success': False})
-    threading.Thread(target=login_thread, daemon=True).start()
 
 @socketio.on('password_login')
 def on_password_login(data):
@@ -544,8 +376,8 @@ def on_password_login(data):
 
 @socketio.on('login')
 def on_login(data):
-    # Legacy handler - redirect to browser login
-    on_browser_login(data)
+    # Redirect to password login
+    on_password_login(data)
 
 @socketio.on('start_bot')
 def on_start(data):
